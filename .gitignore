@@ -1,2 +1,4 @@
 .vscode
 Dataset
+__py*
+.ipynb_*
