@@ -13,6 +13,10 @@ from datetime import datetime
 # from torch.utils.data import Dataset
 # import torchvision.utils as vutils
 
+'''
+    https://hazy.com/blog/2020/01/31/synthpop-for-python/
+    pip install py-synthpop
+'''
 
 from synthpop import Synthpop
 
