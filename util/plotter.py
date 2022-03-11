@@ -22,7 +22,7 @@ class myPlots():
 
     def plotGANs(self, device, error_list_D, error_list_G, testloader, gen, epoch, dict, bash=False):
         real_batch = next(iter(testloader))
-        fake_batch = gen(torch.randn(25,100).to(device))
+        fake_batch = gen(torch.randn(25,dict['LS']).to(device))
 
         fig, axs = plt.subplots(3, 2, figsize=(8.5, 8.5))
         axs[0, 0].plot(error_list_D, 'b*-', lw=3, ms=12)
@@ -42,7 +42,7 @@ class myPlots():
         fig.colorbar(im, ax=axs[1, 1])
         
         values, base = np.histogram(real_batch[0][:25].view(-1).detach().cpu().numpy(), bins=100)
-        valuesFake, baseFake = np.histogram(fake_batch[0].view(-1).detach().cpu().numpy(), bins=100)
+        valuesFake, baseFake = np.histogram(fake_batch.view(-1).detach().cpu().numpy(), bins=100)
         cumulative = np.cumsum(values)
         cumulativeFake = np.cumsum(valuesFake)
         axs[2, 0].plot(base[:-1], cumulative/np.cumsum(values)[-1], 'b*-',  c='blue', lw=3, ms=5)

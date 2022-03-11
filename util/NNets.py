@@ -91,12 +91,13 @@ class SimpleDisc(nn.Module):
 									nn.AvgPool2d(2),
 									)
 
-	def genSeq(self, chnIn = 1, chnOut = 64, dpout = 0.1):
+	def genSeq(self, chnIn = 1, chnOut = 4, dpout = 0.1):
 		loop = len(self.l) - 3
 		l = [self.block(chnIn,chnOut,dpout,1)]
 		for i in range(loop):
 			l.append(self.block(chnOut*2**i,chnOut*2**(i+1),dpout,0))
-		l.append(nn.Sequential(nn.Flatten(), nn.Linear(chnOut*2**(i+1), 1), nn.Sigmoid(),))
+		l.append(nn.Sequential(nn.Flatten(), nn.Linear(chnOut*2**(i+1), 1), nn.LeakyReLU(negative_slope=0.02),))
+# 		l.append(nn.Sequential(nn.Flatten(), nn.Linear(chnOut*2**(i+1), 1), nn.Sigmoid(),))
 		return l
 
 	def getLSize(self):
@@ -130,6 +131,43 @@ class SimpleGen(nn.Module):
 	def forward(self, x):
 		x = self.seqIn(x)
 		return x
+
+# class SimpleGen(nn.Module):
+# 	def __init__(self):
+# 		super(SimpleGen, self).__init__()
+# 		self.seqIn = nn.Sequential(nn.Linear(10,32),
+# 						nn.BatchNorm1d(32),
+# 						nn.LeakyReLU(negative_slope=0.02),
+# # 						Reshape(256,2,2),
+                                   
+# 						nn.Linear(32,64),
+# 						nn.BatchNorm1d(64),
+# 						nn.LeakyReLU(negative_slope=0.02),
+                                   
+# 						nn.Linear(64,128),
+# 						nn.BatchNorm1d(128),
+# 						nn.LeakyReLU(negative_slope=0.02),
+                                   
+# 						nn.Linear(128,36),
+# 						nn.BatchNorm1d(36),
+# 						nn.LeakyReLU(negative_slope=0.001),
+                                   
+# 						Reshape(1,6,6),
+
+# # 						nn.ConvTranspose2d(256,128,3,1,1),
+# # 						nn.Upsample(scale_factor=2),
+# # 						nn.BatchNorm2d(128),
+# # 						nn.LeakyReLU(negative_slope=0.02),
+
+# # 						nn.ConvTranspose2d(128,1,3,1,0),
+# 						# nn.BatchNorm2d(1),
+# 						# nn.Hardtanh(),
+# # 						nn.LeakyReLU(negative_slope=0.001),
+# 						)
+
+# 	def forward(self, x):
+# 		x = self.seqIn(x)
+# 		return x
 
 
 class Reshape(nn.Module):
