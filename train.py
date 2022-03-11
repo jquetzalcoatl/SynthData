@@ -22,23 +22,23 @@ import argparse
 sys.path.insert(1, '/scratch/st-mgorges-1/jtoledom/SynthData/util')
 
 from loaders import generateDatasets, inOut#, saveJSON, loadJSON#, MyData
-from NNets import SimpleClas, SimpleDisc, SimpleGen
+from NNets import SimpleClas, SimpleDisc, SimpleGen, select_nn
 # from tools import accuracy, tools, per_image_error, predVsTarget
 from plotter import myPlots
 
 # class DiffSur(SimpleCNN):
 # 	pass
-def select_nn(arg):
-	if arg == "Class":
-		class nn(SimpleClas):
-			pass       
-	elif arg == "Disc":
-		class nn(SimpleDisc):
-			pass
-	elif arg == "Gen":
-		class nn(SimpleGen):
-			pass
-	return nn
+# def select_nn(arg):
+# 	if arg == "Class":
+# 		class nn(SimpleClas):
+# 			pass       
+# 	elif arg == "Disc":
+# 		class nn(SimpleDisc):
+# 			pass
+# 	elif arg == "Gen":
+# 		class nn(SimpleGen):
+# 			pass
+# 	return nn
 
 
 
@@ -411,3 +411,69 @@ class train(object):
 
 		grad_norm = gradients.view(batch, -1).norm(2, dim=1)
 		return grad_norm.sub(gamma).pow(2).mean()/(gamma**2)
+    
+    
+if __name__ == '__main__':
+	parser = argparse.ArgumentParser("Train Deep GAN")
+	parser.add_argument('--path', dest="path", type=str, default="/scratch/st-mgorges-1/jtoledom/nobackup/SynData/KagCerCanRisk/",
+						help="Specify path to dataset")
+	parser.add_argument('--dataset', dest="dataset", type=str, default="All",
+						help="Specify dataset")
+	parser.add_argument('--dir', dest="dir", type=str, default="0-" + str(datetime.now()).split(" ")[0],
+						help="Specify directory name associated to model")
+	parser.add_argument('--bashtest', dest="bashtest", type=bool, default=False,
+						help="Leave default unless testing flow")
+    
+	parser.add_argument('--bs', dest="bs", type=int, default=100,
+						help="Specify Batch Size")
+	parser.add_argument('--nw', dest="nw", type=int, default=8,
+						help="Specify number of workers")
+	parser.add_argument('--ngpu', dest="ngpu", type=int, default=1,
+						help="Specify ngpu. (Never have tested >1)")
+	parser.add_argument('--lr', dest="lr", type=float, default=0.0001,
+						help="Specify learning rate")
+	parser.add_argument('--maxep', dest="maxep", type=int, default=2000,
+						help="Specify max epochs")
+    
+	parser.add_argument('--newdir', dest="newdir", type=bool, default=False,
+						help="Is this a new model?")
+	parser.add_argument('--newtrain', dest="newtrain", type=bool, default=False,
+						help="Are you starting training")
+    
+    
+	parser.add_argument('--loss', dest="loss", type=str, default="exp",
+						help="Select loss: exp, step, toggle or rand?")
+
+      
+	args = parser.parse_args()
+    
+    
+    ###Start Here
+	PATH = args.path # "/raid/javier/Datasets/DiffSolver/"
+
+
+	dir = args.dir #'1DGX' #'Test'#str(21)
+	BATCH_SIZE=args.bs #50
+	NUM_WORKERS=args.nw #8
+	ngpu = args.ngpu #1
+	lr = args.lr #0.0001
+	device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
+
+	if args.newdir:
+		dict = inOut().newDict(PATH, dir)
+		dict['BatchSize'] = BATCH_SIZE
+		dict['NumWorkers'] = NUM_WORKERS
+		dict['ngpu'] = ngpu
+		dict['lr'] = lr
+	else:
+		dictFilename = os.listdir(os.path.join(PATH, "Dict", dir))[0]
+		dict = inOut().loadDict(os.path.join(PATH, "Dict", dir, dictFilename))
+# 		dict = inOut().loadDict(os.path.join(PATH, "Dict", dir, os.listdir(os.path.join(PATH, "Dict", dir))[0]))
+
+# 	dict
+	if args.newtrain:
+		error_list_D, error_list_G  = train(dict, latentSpace=10, s=6, lam=1).trainWGANs(device, args.maxep, 25)
+	else:
+		error_list_D, error_list_G  = train(dict, latentSpace=10, s=6).continuetrainWGANs(device, args.maxep, 25)
+
+  
