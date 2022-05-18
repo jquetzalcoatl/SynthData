@@ -114,7 +114,8 @@ class SimpleGen(nn.Module):
 		super(SimpleGen, self).__init__()
 		self.seqIn = nn.Sequential(nn.Linear(100,1024),
 						nn.BatchNorm1d(1024),
-						nn.ReLU(),
+# 						nn.ReLU(),
+						nn.LeakyReLU(negative_slope=0.02),
 						Reshape(256,2,2),
 
 						nn.ConvTranspose2d(256,128,3,1,1),
@@ -123,9 +124,10 @@ class SimpleGen(nn.Module):
 						nn.LeakyReLU(negative_slope=0.02),
 
 						nn.ConvTranspose2d(128,1,3,1,0),
-						# nn.BatchNorm2d(1),
+# 						nn.BatchNorm2d(1),
 						# nn.Hardtanh(),
-						nn.LeakyReLU(negative_slope=0.001),
+# 						nn.LeakyReLU(negative_slope=0.001),
+						nn.ReLU(),
 						)
 
 	def forward(self, x):

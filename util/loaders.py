@@ -97,63 +97,97 @@ class inOut(object):
         # date = date[:16].replace(':', '-').replace(' ', '-')
         path = dict['PathRoot'][-1] + "Models/" + dict['Dir'] + "/"
         os.path.isdir(path) or os.mkdir(path)
-        filename = os.path.join(path, f'{module}-backup.pt')
+        filename = os.path.join(path, f'{module}-{tag}.pt')
         torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': loss,
                 }, filename)
-        if len(dict[module]) == 0 or tag != 'backup':
-            dict[module].append(filename)
-        else:
-            dict[module][-1] = filename
+        if tag == 'backup':
+            if len(dict[module]) == 0: # or tag != 'backup'
+                dict[module].append(filename)
+            else:
+                dict[module][-1] = filename
+        elif tag == "Best":
+            if len(dict[module+"-"+tag]) == 0: # or tag != 'backup'
+                dict[module+"-"+tag].append(filename)
+            else:
+                dict[module+"-"+tag][-1] = filename
+#         if len(dict[module]) == 0 or tag != 'backup':
+#             dict[module].append(filename)
+#         else:
+#             dict[module][-1] = filename
         dict["Loss"+module] = loss
         self.saveDict(dict)
 
-    def load_model(self, module, dict, device):
-        if module == "Class":
-            model = select_nn('Class')
-            model = model().to(device)
-        #             model = MLP().to(device)
-            checkpoint = torch.load(dict[module][-1])
-            model.load_state_dict(checkpoint['model_state_dict'])
-            # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            last_epoch = checkpoint['epoch']
-            loss = checkpoint['loss']
-            return last_epoch, loss, model
-        elif module == "Gen":
-            model = select_nn('Gen')
-            model = model().to(device)
-        #             model = Gen().to(device)
-            checkpoint = torch.load(dict[module][-1])
-            model.load_state_dict(checkpoint['model_state_dict'])
-            # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            last_epoch = checkpoint['epoch']
-            loss = checkpoint['loss']
-            return last_epoch, loss, model
-        elif module == "Disc":
-            model = select_nn('Disc')
-            model = model().to(device)
+    def load_model(self, module, dict, device, tag = 'backup'):
+        if tag == 'backup':
+            if module == "Class":
+                model = select_nn('Class')
+                model = model().to(device)
+            #             model = MLP().to(device)
+                checkpoint = torch.load(dict[module][-1])
+                model.load_state_dict(checkpoint['model_state_dict'])
+                # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                last_epoch = checkpoint['epoch']
+                loss = checkpoint['loss']
+                return last_epoch, loss, model
+            elif module == "Gen":
+                model = select_nn('Gen')
+                model = model().to(device)
+            #             model = Gen().to(device)
+                checkpoint = torch.load(dict[module][-1])
+                model.load_state_dict(checkpoint['model_state_dict'])
+                # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                last_epoch = checkpoint['epoch']
+                loss = checkpoint['loss']
+                return last_epoch, loss, model
+            elif module == "Disc":
+                model = select_nn('Disc')
+                model = model().to(device)
 
-        #             model = Disc().to(device)
-            checkpoint = torch.load(dict[module][-1])
-            model.load_state_dict(checkpoint['model_state_dict'])
-            # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            last_epoch = checkpoint['epoch']
-            loss = checkpoint['loss']
-            return last_epoch, loss, model
-        elif module == "Enc":
-            exit()
-            model = select_nn('Disc')
-            model = model().to(device)
-        #             model = Enc().to(device)
-            checkpoint = torch.load(dict[module][-1])
-            model.load_state_dict(checkpoint['model_state_dict'])
-            # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            last_epoch = checkpoint['epoch']
-            loss = checkpoint['loss']
-            return last_epoch, loss, model
+            #             model = Disc().to(device)
+                checkpoint = torch.load(dict[module][-1])
+                model.load_state_dict(checkpoint['model_state_dict'])
+                # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                last_epoch = checkpoint['epoch']
+                loss = checkpoint['loss']
+                return last_epoch, loss, model
+            elif module == "Enc":
+                exit()
+                model = select_nn('Disc')
+                model = model().to(device)
+            #             model = Enc().to(device)
+                checkpoint = torch.load(dict[module][-1])
+                model.load_state_dict(checkpoint['model_state_dict'])
+                # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                last_epoch = checkpoint['epoch']
+                loss = checkpoint['loss']
+                return last_epoch, loss, model
+            
+        elif tag == "Best":
+            if module == "Gen":
+                model = select_nn('Gen')
+                model = model().to(device)
+            #             model = Gen().to(device)
+                checkpoint = torch.load(dict[module+"-"+tag][-1])
+                model.load_state_dict(checkpoint['model_state_dict'])
+                # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                last_epoch = checkpoint['epoch']
+                loss = checkpoint['loss']
+                return last_epoch, loss, model
+            elif module == "Disc":
+                model = select_nn('Disc')
+                model = model().to(device)
+
+            #             model = Disc().to(device)
+                checkpoint = torch.load(dict[module+"-"+tag][-1])
+                model.load_state_dict(checkpoint['model_state_dict'])
+                # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                last_epoch = checkpoint['epoch']
+                loss = checkpoint['loss']
+                return last_epoch, loss, model
 
     def newDict(self, PATH, dir = "0"):
         # os.path.isdir(PATH) or os.mkdir(PATH)
@@ -165,8 +199,10 @@ class inOut(object):
         DICT_NAME = f'Dict-{date}.json'
         dict = {
             "Class" : [],
-            "Gen" :	[],
+            "Gen" : [],
+            "Gen-Best" : [],
             "Disc" : [],
+            "Disc-Best" : [],
             # "Enc" : [],
             "Path" : [path + DICT_NAME],
             "PathRoot" : [PATH],

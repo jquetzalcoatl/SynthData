@@ -104,6 +104,7 @@ class train(object):
 		gen = gen().to(device)
 # 		gen = Gen(ngpu, flag, alpha, nc).to(device)
 		criterion = nn.BCELoss()
+		reg = self.covLoss
 
 		#OPT
 		optD = optim.Adam(disc.parameters(), lr=self.dict['lr'], betas=(0.5, 0.99))
@@ -111,10 +112,12 @@ class train(object):
 		trainloader, testloader = generateDatasets(self.dict['PathRoot'][-1], batch_size=self.dict['BatchSize'], num_workers=self.dict['NumWorkers'], std_tr=self.std_tr, s=self.s).getDataLoaders()
 		error_list_D = []
 		error_list_G = []
+		error_list_Reg = []
 
 		for epoch in range(epochs):
 			errorD = 0.0
 			errorG = 0.0
+			errorReg = 0.0
 			for (i, data) in enumerate(trainloader):
 				disc.zero_grad()
 				x = data[0].to(device)
@@ -132,17 +135,24 @@ class train(object):
 
 				gen.zero_grad()
 				yfake = disc(xfake)
-				errG = criterion(yfake, yR)
+				l1 = criterion(yfake, yR)
+				l2 = self.lam * reg(x, xfake)
+				errG = l1 + l2
 				errG.backward()
 				optG.step()
 				errorG += errG.item()
+				errorReg += l2.item()
 				# if i > 2:
 				# 	break
 			error_list_D.append(errorD/(i+1))
 			error_list_G.append(errorG/(i+1))
+			error_list_Reg.append(errorReg/(i+1))
 			myPlots().plotGANs(device, error_list_D, error_list_G, testloader, gen, epoch, self.dict)
+			self.saveBestModel(gen, 'Gen', optG, error_list_G, disc, 'Disc', optD, error_list_D, epoch, self.dict) 
+			print(f'ErrG: {error_list_G[-1]}, ErrReg: {error_list_Reg[-1]}')
 
 			if epoch % snap == snap-1 :
+				self.dict["LossReg"] = error_list_Reg
 				inOut().save_model(gen, 'Gen', optG, error_list_G, epoch, self.dict)
 				inOut().save_model(disc, 'Disc', optD, error_list_D, epoch, self.dict)
 		print("Done!!")
@@ -173,19 +183,23 @@ class train(object):
 			errorG = 0.0
 			errorReg = 0.0
 			for (i, data) in enumerate(trainloader):
-				disc.zero_grad()
-				x = data[0].to(device)
-				# y = data[1].to(device)
-				yreal = disc(x)
-				yR = torch.full((yreal.shape[0],1), self.real_label, device=device)
-				z = torch.randn(x.shape[0],self.latentSpace).to(device)
-				xfake = gen(z)
-				yfake = disc(xfake.detach())
-				yF = torch.full((yfake.shape[0],1), self.fake_label, device=device)
-				err = - criterion(yreal) + criterion(yfake)
-				err.backward()
-				optD.step()
-				errorD += err.item()
+				for (j, data) in enumerate(trainloader):
+					disc.zero_grad()
+					x = data[0].to(device)
+					# y = data[1].to(device)
+					yreal = disc(x)
+					yR = torch.full((yreal.shape[0],1), self.real_label, device=device)
+					z = torch.randn(x.shape[0],self.latentSpace).to(device)
+					xfake = gen(z)
+					yfake = disc(xfake.detach())
+					yF = torch.full((yfake.shape[0],1), self.fake_label, device=device)
+					err = - criterion(yreal) + criterion(yfake)
+					err.backward()
+					torch.nn.utils.clip_grad_norm(disc.parameters(), 0.01)
+					optD.step()
+					errorD += err.item()
+					if j > 5:
+						break
 
 				gen.zero_grad()
 				yfake = disc(xfake)
@@ -203,9 +217,11 @@ class train(object):
 			error_list_G.append(errorG/(i+1))
 			error_list_Reg.append(errorReg/(i+1))
 			myPlots().plotGANs(device, error_list_D, error_list_G, testloader, gen, epoch, self.dict)
+			self.saveBestModel(gen, 'Gen', optG, error_list_G, disc, 'Disc', optD, error_list_D, epoch, self.dict) 
 			print(f'ErrG: {error_list_G[-1]}, ErrReg: {error_list_Reg[-1]}')
 
 			if epoch % snap == snap-1 :
+				self.dict["LossReg"] = error_list_Reg
 				inOut().save_model(gen, 'Gen', optG, error_list_G, epoch, self.dict)
 				inOut().save_model(disc, 'Disc', optD, error_list_D, epoch, self.dict)
 		print("Done!!")
@@ -259,6 +275,7 @@ class train(object):
 			myPlots().plotGANs(device, error_list_D, error_list_G, testloader, gen, epoch, self.dict)
 
 			if epoch % snap == snap-1 :
+# 				self.dict["LossReg"] = error_list_Reg
 				inOut().save_model(gen, 'Gen', optG, error_list_G, epoch, self.dict)
 				inOut().save_model(disc, 'Disc', optD, error_list_D, epoch, self.dict)
 		print("Done!!")
@@ -321,8 +338,77 @@ class train(object):
 				inOut().save_model(disc, 'Disc', optD, error_list_D, epoch, self.dict)
 		print("Done!!")
 		return error_list_D, error_list_G
+    
+	def continuetrainGANs(self, device, epochs=100, snap=25):
+		myLog = inOut()
+		myLog.logFunc(self.dict)
+# 		disc = select_nn('Disc')
+# 		disc = disc().to(device)
+# 		disc = Disc(ngpu, flag, alpha, nc).to(device)
+# 		gen = select_nn('Gen')
+# 		gen = gen().to(device)
+# 		gen = Gen(ngpu, flag, alpha, nc).to(device)
+		lastEpoch, _, gen = inOut().load_model( "Gen", self.dict, device)
+		_, _, disc = inOut().load_model( "Disc", self.dict, device)
+		print(lastEpoch)
+		criterion = nn.BCELoss()
+		reg = self.covLoss
+
+		#OPT
+		optD = optim.Adam(disc.parameters(), lr=self.dict['lr'], betas=(0.5, 0.99))
+		optG = optim.Adam(gen.parameters(), lr=self.dict['lr'], betas=(0.5, 0.99))
+		trainloader, testloader = generateDatasets(self.dict['PathRoot'][-1], batch_size=self.dict['BatchSize'], num_workers=self.dict['NumWorkers'], std_tr=self.std_tr, s=self.s).getDataLoaders()
+		error_list_D = self.dict["LossDisc"]
+		error_list_G = self.dict["LossGen"]
+		error_list_Reg = self.dict["LossReg"]
+
+		for epoch in range(epochs):
+			errorD = 0.0
+			errorG = 0.0
+			errorReg = 0.0
+			for (i, data) in enumerate(trainloader):
+				disc.zero_grad()
+				x = data[0].to(device)
+				# y = data[1].to(device)
+				yreal = disc(x)
+				yR = torch.full((yreal.shape[0],1), self.real_label, device=device)
+				z = torch.randn(x.shape[0], self.latentSpace).to(device)
+				xfake = gen(z)
+				yfake = disc(xfake.detach())
+				yF = torch.full((yfake.shape[0],1), self.fake_label, device=device)
+				err = criterion(yreal,yR) + criterion(yfake,yF)
+				err.backward()
+				optD.step()
+				errorD += err.item()
+
+				gen.zero_grad()
+				yfake = disc(xfake)
+				l1 = criterion(yfake, yR)
+				l2 = self.lam * reg(x, xfake)
+				errG = l1 + l2
+				errG.backward()
+				optG.step()
+				errorG += errG.item()
+				errorReg += l2.item()
+				# if i > 2:
+				# 	break
+			error_list_D.append(errorD/(i+1))
+			error_list_G.append(errorG/(i+1))
+			error_list_Reg.append(errorReg/(i+1))
+			myPlots().plotGANs(device, error_list_D, error_list_G, testloader, gen, epoch, self.dict)
+			self.saveBestModel(gen, 'Gen', optG, error_list_G, disc, 'Disc', optD, error_list_D, epoch, self.dict) 
+			print(f'ErrG: {error_list_G[-1]}, ErrReg: {error_list_Reg[-1]}')
+
+			if epoch % snap == snap-1 :
+				self.dict["LossReg"] = error_list_Reg
+				inOut().save_model(gen, 'Gen', optG, error_list_G, epoch, self.dict)
+				inOut().save_model(disc, 'Disc', optD, error_list_D, epoch, self.dict)
+		print("Done!!")
+		return error_list_D, error_list_G
 
 	def continuetrainWGANs(self, device, epochs=100, snap=25):
+		myLog = inOut()
+		myLog.logFunc(self.dict)
 		# disc = Disc().to(device)
 		# gen = Gen().to(device)
 		lastEpoch, _, gen = inOut().load_model( "Gen", self.dict, device)
@@ -337,6 +423,7 @@ class train(object):
 		trainloader, testloader = generateDatasets(self.dict['PathRoot'][-1], batch_size=self.dict['BatchSize'], num_workers=self.dict['NumWorkers'], std_tr=self.std_tr, s=self.s).getDataLoaders()
 		error_list_D = self.dict["LossDisc"]
 		error_list_G = self.dict["LossGen"]
+		error_list_Reg = self.dict["LossReg"]
 
 		for epoch in range(epochs):
 			errorD = 0.0
@@ -367,8 +454,11 @@ class train(object):
 			error_list_D.append(errorD/(i+1))
 			error_list_G.append(errorG/(i+1))
 			myPlots().plotGANs(device, error_list_D, error_list_G, testloader, gen, epoch, self.dict)
+			self.saveBestModel(gen, 'Gen', optG, error_list_G, disc, 'Disc', optD, error_list_D, epoch, self.dict) 
+			print(f'ErrG: {error_list_G[-1]}, ErrReg: {error_list_Reg[-1]}')
 
 			if epoch % snap == snap-1 :
+				self.dict["LossReg"] = error_list_Reg
 				inOut().save_model(gen, 'Gen', optG, error_list_G, epoch, self.dict)
 				inOut().save_model(disc, 'Disc', optD, error_list_D, epoch, self.dict)
 		print("Done!!")
@@ -411,6 +501,13 @@ class train(object):
 
 		grad_norm = gradients.view(batch, -1).norm(2, dim=1)
 		return grad_norm.sub(gamma).pow(2).mean()/(gamma**2)
+    
+	def saveBestModel(self, gen, modG, optG, error_list_G, disc, modD, optD, error_list_D, epoch, dict, tag='Best'):
+		if error_list_D.index(np.min(error_list_D)) == len(error_list_D)-1:
+			inOut().save_model(gen, modG, optG, error_list_G, epoch, dict, tag=tag)
+			inOut().save_model(disc, modD, optD, error_list_D, epoch, dict, tag=tag)
+# 			inOut().save_model(PATH, dict, theModel, module, opt, error_list, error_list_test, epoch, dir, tag=tag)
+            #save model
     
     
 if __name__ == '__main__':
